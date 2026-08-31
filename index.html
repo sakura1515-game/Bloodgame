@@ -12,13 +12,17 @@
     margin: 0; padding: 6px 8px; display: flex; flex-direction: column; align-items: center; min-height: 100vh;
   }
   h3 { margin: 2px 0 4px; color: #f39c12; font-size: 16px; }
-  .controls-row { display: flex; gap: 4px; margin-bottom: 4px; flex-wrap: wrap; justify-content: center; }
+  .controls-row { display: flex; gap: 4px; margin-bottom: 4px; flex-wrap: wrap; justify-content: center; align-items: center; }
   .btn {
     padding: 4px 8px; font-size: 10px; font-weight: bold; border: 1px solid #555;
     background: #2b2b36; color: #aaa; border-radius: 12px; cursor: pointer;
   }
   .btn.active { background: #3498db; color: #fff; border-color: #3498db; }
   .btn.hint-on { background: #9b59b6; color: #fff; border-color: #9b59b6; }
+  .bgm-select {
+    padding: 3px 6px; font-size: 10px; font-weight: bold; border: 1px solid #ff9f43;
+    background: #2b2b36; color: #ff9f43; border-radius: 12px; cursor: pointer; outline: none;
+  }
   #net-panel {
     display: none; background: #242430; border: 1px solid #444; border-radius: 6px;
     padding: 4px 8px; margin-bottom: 4px; font-size: 11px; text-align: center; width: 100%; max-width: 320px;
@@ -124,6 +128,13 @@
   <button id="mode-pvp" class="btn" onclick="setMode('pvp')">👥 로컬 2인</button>
   <button id="mode-net" class="btn" onclick="setMode('net')">🌐 온라인 대전</button>
   <button id="hint-toggle" class="btn" onclick="toggleHint()">💡 힌트</button>
+  <button id="sound-toggle" class="btn active" onclick="toggleSound()">🔊 효과음</button>
+  <select id="bgm-selector" class="bgm-select" onchange="changeBGM(this.value)">
+    <option value="calm">🎵 BGM: 전술의 정적</option>
+    <option value="tense">⚔️ BGM: 팽팽한 긴장</option>
+    <option value="retro">✨ BGM: 경쾌한 칩튠</option>
+    <option value="off">🔇 BGM: 끔</option>
+  </select>
 </div>
 
 <div id="net-panel">
@@ -157,6 +168,186 @@
 <button class="action-btn" onclick="init()">새 게임</button>
 
 <script>
+// --- Web Audio API 기반 오디오 엔진 (SFX + BGM 합성) ---
+let audioCtx = null;
+let soundEnabled = true;
+let currentBGMType = 'calm';
+let bgmTimer = null;
+let bgmStep = 0;
+
+function getAudioContext() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  return audioCtx;
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  const btn = document.getElementById('sound-toggle');
+  btn.className = 'btn ' + (soundEnabled ? 'active' : '');
+  btn.innerText = soundEnabled ? '🔊 효과음' : '🔇 효과음 끔';
+}
+
+function playSound(type) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    const t = ctx.currentTime;
+
+    if (type === 'select') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, t);
+      osc.frequency.exponentialRampToValueAtTime(800, t + 0.05);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.05);
+    } else if (type === 'move') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(180, t);
+      osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
+      gain.gain.setValueAtTime(0.35, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.08);
+    } else if (type === 'capture') {
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc1.type = 'sawtooth';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(260, t);
+      osc1.frequency.exponentialRampToValueAtTime(60, t + 0.12);
+      osc2.frequency.setValueAtTime(120, t);
+      osc2.frequency.exponentialRampToValueAtTime(30, t + 0.12);
+      gain.gain.setValueAtTime(0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+      osc1.start(t);
+      osc2.start(t);
+      osc1.stop(t + 0.12);
+      osc2.stop(t + 0.12);
+    } else if (type === 'win') {
+      [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t + i * 0.1);
+        gain.gain.setValueAtTime(0, t + i * 0.1);
+        gain.gain.linearRampToValueAtTime(0.2, t + i * 0.1 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.28);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t + i * 0.1);
+        osc.stop(t + i * 0.1 + 0.3);
+      });
+    } else if (type === 'lose') {
+      [400, 350, 300, 220].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, t + i * 0.12);
+        gain.gain.setValueAtTime(0.18, t + i * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.12 + 0.14);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t + i * 0.12);
+        osc.stop(t + i * 0.12 + 0.15);
+      });
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// BGM 루프 제어기
+function playBGMNote(freq, dur, type = 'sine', vol = 0.05) {
+  if (!freq) return;
+  try {
+    const ctx = getAudioContext();
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur);
+  } catch (e) {}
+}
+
+const BGM_PATTERNS = {
+  calm: {
+    tempo: 320,
+    bass: [130.81, null, 146.83, null, 164.81, null, 146.83, null],
+    lead: [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 293.66, 349.23],
+    wave: 'sine',
+    vol: 0.04
+  },
+  tense: {
+    tempo: 160,
+    bass: [110, 110, 116.54, 110, 123.47, 110, 116.54, 130.81],
+    lead: [220, null, 233.08, null, 246.94, null, 233.08, null],
+    wave: 'sawtooth',
+    vol: 0.025
+  },
+  retro: {
+    tempo: 200,
+    bass: [130.81, 196.00, 130.81, 196.00, 146.83, 220.00, 146.83, 220.00],
+    lead: [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880.00, 698.46],
+    wave: 'triangle',
+    vol: 0.035
+  }
+};
+
+function stepBGM() {
+  if (currentBGMType === 'off') return;
+  const pat = BGM_PATTERNS[currentBGMType];
+  if (!pat) return;
+
+  const idx = bgmStep % pat.lead.length;
+  if (pat.lead[idx]) playBGMNote(pat.lead[idx], pat.tempo / 1000 * 0.9, pat.wave, pat.vol);
+  if (pat.bass[idx]) playBGMNote(pat.bass[idx], pat.tempo / 1000 * 0.8, 'triangle', pat.vol * 1.2);
+
+  bgmStep++;
+  bgmTimer = setTimeout(stepBGM, pat.tempo);
+}
+
+function changeBGM(type) {
+  currentBGMType = type;
+  if (bgmTimer) clearTimeout(bgmTimer);
+  if (type !== 'off') {
+    getAudioContext();
+    bgmStep = 0;
+    stepBGM();
+  }
+}
+
+// 화면 어디든 처음 터치/클릭할 때 브라우저 오디오 권한 자동 활성화
+window.addEventListener('click', () => {
+  getAudioContext();
+  if (currentBGMType !== 'off' && !bgmTimer) {
+    stepBGM();
+  }
+}, { once: true });
+
 const CARDS = {
   점프: {
     name: '점프',
@@ -253,6 +444,7 @@ let selCIdx = null, selP = null, validMoves = [], gameOver = false, holdingSide 
 let peer = null, conn = null, myRole = null;
 
 function setMode(m) {
+  playSound('select');
   mode = m;
   ['pve','pvp','net'].forEach(id => {
     document.getElementById('mode-' + id).className = 'btn ' + (m === id ? 'active' : '');
@@ -263,6 +455,7 @@ function setMode(m) {
 }
 
 function toggleHint() {
+  playSound('select');
   showHint = !showHint;
   let b = document.getElementById('hint-toggle');
   b.className = 'btn ' + (showHint ? 'hint-on' : '');
@@ -298,11 +491,13 @@ function init(isSync = false) {
 }
 
 function closeWinModalAndRestart() {
+  playSound('select');
   document.getElementById('win-modal').style.display = 'none';
   init();
 }
 
 function createRoom() {
+  playSound('select');
   let code = Math.floor(1000 + Math.random() * 9000);
   peer = new Peer('chess5x5-' + code);
   peer.on('open', () => {
@@ -319,6 +514,7 @@ function createRoom() {
 }
 
 function joinRoom() {
+  playSound('select');
   let code = document.getElementById('join-code').value.trim();
   if (!code) return alert('코드 4자리를 입력하세요.');
   peer = new Peer();
@@ -353,6 +549,7 @@ function selCard(s, i) {
   if (gameOver || s !== turn) return;
   if (mode === 'pve' && s === 'B') return;
   if (mode === 'net' && myRole !== s) return;
+  playSound('select');
   selCIdx = i;
   selP = null;
   validMoves = [];
@@ -366,6 +563,7 @@ function onCell(r, c) {
 
   const p = board[r][c];
   if (selCIdx !== null && p && p.side === turn) {
+    playSound('select');
     selP = [r, c];
     validMoves = CARDS[hands[turn][selCIdx]].getTargets(r, c, turn, board);
     render();
@@ -381,6 +579,9 @@ function onCell(r, c) {
 }
 
 function executeAction(fr, fc, tr, tc, cardIdx, isRemote = false) {
+  const isCapture = (board[tr][tc] !== null);
+  playSound(isCapture ? 'capture' : 'move');
+
   board[tr][tc] = board[fr][fc];
   board[fr][fc] = null;
 
@@ -455,14 +656,22 @@ function runAI() {
 function end(winner, reasonMsg) {
   gameOver = true;
   render();
+
+  let isPlayerWin = false;
   let winnerText = '';
+
   if (mode === 'net' && myRole) {
-    winnerText = (winner === myRole) ? '🎉 당신의 승리!' : '💀 상대방의 승리';
+    isPlayerWin = (winner === myRole);
+    winnerText = isPlayerWin ? '🎉 당신의 승리!' : '💀 상대방의 승리';
   } else if (mode === 'pve') {
-    winnerText = (winner === 'W') ? '🎉 백(당신)의 승리!' : '🤖 흑(AI)의 승리!';
+    isPlayerWin = (winner === 'W');
+    winnerText = isPlayerWin ? '🎉 백(당신)의 승리!' : '🤖 흑(AI)의 승리!';
   } else {
+    isPlayerWin = true;
     winnerText = (winner === 'W') ? '⚪ 백(White) 승리!' : '⚫ 흑(Black) 승리!';
   }
+
+  playSound(isPlayerWin ? 'win' : 'lose');
 
   document.getElementById('win-title').innerText = winnerText;
   document.getElementById('win-reason').innerText = reasonMsg;
