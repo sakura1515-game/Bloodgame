@@ -124,7 +124,7 @@
 <h3>5x5 전술 카드 체스</h3>
 
 <div class="controls-row">
-  <button id="mode-pve" class="btn active" onclick="setMode('pve')">🤖 vs AI</button>
+  <button id="mode-pve" class="btn active" onclick="setMode('pve')">🤖 vs Master AI</button>
   <button id="mode-pvp" class="btn" onclick="setMode('pvp')">👥 로컬 2인</button>
   <button id="mode-net" class="btn" onclick="setMode('net')">🌐 온라인 대전</button>
   <button id="hint-toggle" class="btn" onclick="toggleHint()">💡 힌트</button>
@@ -168,7 +168,7 @@
 <button class="action-btn" onclick="init()">새 게임</button>
 
 <script>
-// --- Web Audio API 기반 오디오 엔진 (SFX + BGM 합성) ---
+// --- Web Audio API 기반 오디오 엔진 (볼륨 2~3배 강화) ---
 let audioCtx = null;
 let soundEnabled = true;
 let currentBGMType = 'calm';
@@ -203,44 +203,44 @@ function playSound(type) {
       const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(600, t);
-      osc.frequency.exponentialRampToValueAtTime(800, t + 0.05);
-      gain.gain.setValueAtTime(0.12, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+      osc.frequency.exponentialRampToValueAtTime(900, t + 0.06);
+      gain.gain.setValueAtTime(0.35, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.05);
+      osc.stop(t + 0.06);
     } else if (type === 'move') {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(180, t);
-      osc.frequency.exponentialRampToValueAtTime(40, t + 0.08);
-      gain.gain.setValueAtTime(0.35, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      osc.frequency.setValueAtTime(200, t);
+      osc.frequency.exponentialRampToValueAtTime(45, t + 0.09);
+      gain.gain.setValueAtTime(0.85, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(t);
-      osc.stop(t + 0.08);
+      osc.stop(t + 0.09);
     } else if (type === 'capture') {
       const osc1 = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
       const gain = ctx.createGain();
       osc1.type = 'sawtooth';
       osc2.type = 'sine';
-      osc1.frequency.setValueAtTime(260, t);
-      osc1.frequency.exponentialRampToValueAtTime(60, t + 0.12);
-      osc2.frequency.setValueAtTime(120, t);
-      osc2.frequency.exponentialRampToValueAtTime(30, t + 0.12);
-      gain.gain.setValueAtTime(0.3, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      osc1.frequency.setValueAtTime(300, t);
+      osc1.frequency.exponentialRampToValueAtTime(50, t + 0.14);
+      osc2.frequency.setValueAtTime(140, t);
+      osc2.frequency.exponentialRampToValueAtTime(25, t + 0.14);
+      gain.gain.setValueAtTime(0.75, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
       osc1.connect(gain);
       osc2.connect(gain);
       gain.connect(ctx.destination);
       osc1.start(t);
       osc2.start(t);
-      osc1.stop(t + 0.12);
-      osc2.stop(t + 0.12);
+      osc1.stop(t + 0.14);
+      osc2.stop(t + 0.14);
     } else if (type === 'win') {
       [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
         const osc = ctx.createOscillator();
@@ -248,7 +248,7 @@ function playSound(type) {
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(freq, t + i * 0.1);
         gain.gain.setValueAtTime(0, t + i * 0.1);
-        gain.gain.linearRampToValueAtTime(0.2, t + i * 0.1 + 0.02);
+        gain.gain.linearRampToValueAtTime(0.5, t + i * 0.1 + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.1 + 0.28);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -261,7 +261,7 @@ function playSound(type) {
         const gain = ctx.createGain();
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(freq, t + i * 0.12);
-        gain.gain.setValueAtTime(0.18, t + i * 0.12);
+        gain.gain.setValueAtTime(0.45, t + i * 0.12);
         gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.12 + 0.14);
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -269,13 +269,10 @@ function playSound(type) {
         osc.stop(t + i * 0.12 + 0.15);
       });
     }
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) {}
 }
 
-// BGM 루프 제어기
-function playBGMNote(freq, dur, type = 'sine', vol = 0.05) {
+function playBGMNote(freq, dur, type = 'sine', vol = 0.12) {
   if (!freq) return;
   try {
     const ctx = getAudioContext();
@@ -299,21 +296,21 @@ const BGM_PATTERNS = {
     bass: [130.81, null, 146.83, null, 164.81, null, 146.83, null],
     lead: [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 293.66, 349.23],
     wave: 'sine',
-    vol: 0.04
+    vol: 0.1
   },
   tense: {
     tempo: 160,
     bass: [110, 110, 116.54, 110, 123.47, 110, 116.54, 130.81],
     lead: [220, null, 233.08, null, 246.94, null, 233.08, null],
     wave: 'sawtooth',
-    vol: 0.025
+    vol: 0.07
   },
   retro: {
     tempo: 200,
     bass: [130.81, 196.00, 130.81, 196.00, 146.83, 220.00, 146.83, 220.00],
     lead: [523.25, 659.25, 783.99, 659.25, 587.33, 698.46, 880.00, 698.46],
     wave: 'triangle',
-    vol: 0.035
+    vol: 0.09
   }
 };
 
@@ -340,7 +337,6 @@ function changeBGM(type) {
   }
 }
 
-// 화면 어디든 처음 터치/클릭할 때 브라우저 오디오 권한 자동 활성화
 window.addEventListener('click', () => {
   getAudioContext();
   if (currentBGMType !== 'off' && !bgmTimer) {
@@ -620,27 +616,103 @@ function executeAction(fr, fc, tr, tc, cardIdx, isRemote = false) {
   if (mode === 'pve' && turn === 'B' && !gameOver) setTimeout(runAI, 600);
 }
 
-function evaluateMoves(side) {
-  let allMoves = [], opp = (side === 'W') ? 'B' : 'W', targetR = (side === 'W') ? 0 : 4;
+// --- 강화된 수읽기 / 평가 로직 (Minimax 2단계 탐색) ---
+function getAllMoves(b, side, h) {
+  let list = [];
   for (let ci = 0; ci < 2; ci++) {
-    let cName = hands[side][ci];
+    let cName = h[side][ci];
     for (let r = 0; r < 5; r++) {
       for (let c = 0; c < 5; c++) {
-        if (board[r][c]?.side === side) {
-          let tgts = CARDS[cName].getTargets(r, c, side, board);
+        if (b[r][c]?.side === side) {
+          let tgts = CARDS[cName].getTargets(r, c, side, b);
           tgts.forEach(([tr, tc]) => {
-            let score = 0;
-            if (tr === targetR && tc === 2) score += 100;
-            if (board[tr][tc]?.side === opp) score += 50;
-            let dist = Math.abs(targetR - tr) + Math.abs(2 - tc);
-            score += (8 - dist) * 2;
-            allMoves.push({ fr: r, fc: c, tr, tc, ci, score });
+            list.push({ fr: r, fc: c, tr, tc, ci, cName });
           });
         }
       }
     }
   }
-  return allMoves.sort((a, b) => b.score - a.score);
+  return list;
+}
+
+function evaluateBoardState(b, side, hSide, hOpp, curHolding) {
+  let opp = side === 'W' ? 'B' : 'W';
+  let targetR = side === 'W' ? 0 : 4;
+  let oppTargetR = opp === 'W' ? 0 : 4;
+
+  let score = 0;
+  let myPieces = 0, oppPieces = 0;
+
+  for (let r = 0; r < 5; r++) {
+    for (let c = 0; c < 5; c++) {
+      let p = b[r][c];
+      if (p?.side === side) {
+        myPieces++;
+        let dist = Math.abs(targetR - r) + Math.abs(2 - c);
+        score += (8 - dist) * 4; // 상대 진지 전진 가산점
+      } else if (p?.side === opp) {
+        oppPieces++;
+        let oppDist = Math.abs(oppTargetR - r) + Math.abs(2 - c);
+        score -= (8 - oppDist) * 4;
+      }
+    }
+  }
+
+  score += (myPieces - oppPieces) * 120; // 말 수 차이 반영
+
+  if (curHolding === side && b[targetR][2]?.side === side) score += 5000;
+  if (curHolding === opp && b[oppTargetR][2]?.side === opp) score -= 5000;
+
+  return score;
+}
+
+function evaluateMoves(side) {
+  let moves = getAllMoves(board, side, hands);
+  let scoredMoves = moves.map(m => {
+    // 1단계: 내 수 가상 실행
+    let simB = board.map(row => row.map(cell => cell ? { ...cell } : null));
+    simB[m.tr][m.tc] = simB[m.fr][m.fc];
+    simB[m.fr][m.fc] = null;
+
+    let targetR = side === 'W' ? 0 : 4;
+    let nextHolding = (simB[targetR][2]?.side === side) ? side : (holdingSide === side ? null : holdingSide);
+
+    // 승리 직행 수인 경우 최고점
+    if (holdingSide === side && simB[targetR][2]?.side === side) {
+      return { ...m, score: 99999 };
+    }
+
+    let opp = side === 'W' ? 'B' : 'W';
+    let simHands = { W: [...hands.W], B: [...hands.B] };
+    let simWait = waitCard;
+    simHands[side][m.ci] = simWait;
+
+    // 2단계: 상대방의 최선의 반격 탐색 (Minimax)
+    let oppMoves = getAllMoves(simB, opp, simHands);
+    let worstOppScore = 9999;
+
+    if (oppMoves.length === 0) {
+      return { ...m, score: 90000 };
+    }
+
+    oppMoves.forEach(om => {
+      let simB2 = simB.map(row => row.map(cell => cell ? { ...cell } : null));
+      simB2[om.tr][om.tc] = simB2[om.fr][om.fc];
+      simB2[om.fr][om.fc] = null;
+
+      let oppTarget = opp === 'W' ? 0 : 4;
+      let finalHolding = (simB2[oppTarget][2]?.side === opp) ? opp : (nextHolding === opp ? null : nextHolding);
+
+      let evalScore = evaluateBoardState(simB2, side, simHands[side], simHands[opp], finalHolding);
+      if (evalScore < worstOppScore) {
+        worstOppScore = evalScore;
+      }
+    });
+
+    return { ...m, score: worstOppScore };
+  });
+
+  return scoredMoves.sort((a, b) => b.score - a.score);
 }
 
 function runAI() {
@@ -650,7 +722,7 @@ function runAI() {
   let best = allMoves[0];
   selCIdx = best.ci;
   render();
-  setTimeout(() => { executeAction(best.fr, best.fc, best.tr, best.tc, best.ci); }, 200);
+  setTimeout(() => { executeAction(best.fr, best.fc, best.tr, best.tc, best.ci); }, 250);
 }
 
 function end(winner, reasonMsg) {
@@ -732,7 +804,7 @@ function render() {
 
   if (!gameOver) {
     let alertMsg = holdingSide ? ` ⚠️[${holdingSide === 'W' ? '백' : '흑'} 진지 점령 중!]` : '';
-    let turnLabel = (turn === 'W') ? '백 차례' : '흑 차례';
+    let turnLabel = (turn === 'W') ? '백 차례' : (mode === 'pve' ? '흑(AI 생각 중...)' : '흑 차례');
     if (mode === 'net' && myRole) turnLabel = (turn === myRole) ? '👉 내 차례' : '상대방 차례...';
     document.getElementById('status').innerText = `${turnLabel}${alertMsg}`;
   }
