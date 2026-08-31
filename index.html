@@ -19,10 +19,12 @@
   }
   .btn.active { background: #3498db; color: #fff; border-color: #3498db; }
   .btn.hint-on { background: #9b59b6; color: #fff; border-color: #9b59b6; }
-  .bgm-select {
-    padding: 3px 6px; font-size: 10px; font-weight: bold; border: 1px solid #ff9f43;
-    background: #2b2b36; color: #ff9f43; border-radius: 12px; cursor: pointer; outline: none;
+  .styled-select {
+    padding: 3px 6px; font-size: 10px; font-weight: bold; border: 1px solid #555;
+    background: #2b2b36; color: #fff; border-radius: 12px; cursor: pointer; outline: none;
   }
+  .ai-select { border-color: #e74c3c; color: #ff7675; }
+  .bgm-select { border-color: #ff9f43; color: #ff9f43; }
   #net-panel {
     display: none; background: #242430; border: 1px solid #444; border-radius: 6px;
     padding: 4px 8px; margin-bottom: 4px; font-size: 11px; text-align: center; width: 100%; max-width: 320px;
@@ -124,12 +126,18 @@
 <h3>5x5 전술 카드 체스</h3>
 
 <div class="controls-row">
-  <button id="mode-pve" class="btn active" onclick="setMode('pve')">🤖 vs Master AI</button>
+  <button id="mode-pve" class="btn active" onclick="setMode('pve')">🤖 vs AI</button>
   <button id="mode-pvp" class="btn" onclick="setMode('pvp')">👥 로컬 2인</button>
   <button id="mode-net" class="btn" onclick="setMode('net')">🌐 온라인 대전</button>
   <button id="hint-toggle" class="btn" onclick="toggleHint()">💡 힌트</button>
+  <select id="ai-diff-select" class="styled-select ai-select" onchange="changeAIDiff(this.value)">
+    <option value="easy">🌱 AI: 초급</option>
+    <option value="normal">⚔️ AI: 중급</option>
+    <option value="hard">🧠 AI: 고급</option>
+    <option value="god" selected>💀 AI: 불가능(God)</option>
+  </select>
   <button id="sound-toggle" class="btn active" onclick="toggleSound()">🔊 효과음</button>
-  <select id="bgm-selector" class="bgm-select" onchange="changeBGM(this.value)">
+  <select id="bgm-selector" class="styled-select bgm-select" onchange="changeBGM(this.value)">
     <option value="calm">🎵 BGM: 전술의 정적</option>
     <option value="tense">⚔️ BGM: 팽팽한 긴장</option>
     <option value="retro">✨ BGM: 경쾌한 칩튠</option>
@@ -168,12 +176,13 @@
 <button class="action-btn" onclick="init()">새 게임</button>
 
 <script>
-// --- Web Audio API 기반 오디오 엔진 (볼륨 2~3배 강화) ---
+// --- Web Audio API 기반 오디오 엔진 ---
 let audioCtx = null;
 let soundEnabled = true;
 let currentBGMType = 'calm';
 let bgmTimer = null;
 let bgmStep = 0;
+let aiDifficulty = 'god';
 
 function getAudioContext() {
   if (!audioCtx) {
@@ -190,6 +199,10 @@ function toggleSound() {
   const btn = document.getElementById('sound-toggle');
   btn.className = 'btn ' + (soundEnabled ? 'active' : '');
   btn.innerText = soundEnabled ? '🔊 효과음' : '🔇 효과음 끔';
+}
+
+function changeAIDiff(val) {
+  aiDifficulty = val;
 }
 
 function playSound(type) {
@@ -446,6 +459,7 @@ function setMode(m) {
     document.getElementById('mode-' + id).className = 'btn ' + (m === id ? 'active' : '');
   });
   document.getElementById('net-panel').style.display = (m === 'net') ? 'block' : 'none';
+  document.getElementById('ai-diff-select').style.display = (m === 'pve') ? 'inline-block' : 'none';
   render();
   if (mode === 'pve' && turn === 'B' && !gameOver) setTimeout(runAI, 500);
 }
@@ -613,10 +627,10 @@ function executeAction(fr, fc, tr, tc, cardIdx, isRemote = false) {
   validMoves = [];
   render();
 
-  if (mode === 'pve' && turn === 'B' && !gameOver) setTimeout(runAI, 600);
+  if (mode === 'pve' && turn === 'B' && !gameOver) setTimeout(runAI, 300);
 }
 
-// --- 강화된 수읽기 / 평가 로직 (Minimax 2단계 탐색) ---
+// --- 엔진: 고도화된 Alpha-Beta Minimax AI ---
 function getAllMoves(b, side, h) {
   let list = [];
   for (let ci = 0; ci < 2; ci++) {
@@ -635,81 +649,138 @@ function getAllMoves(b, side, h) {
   return list;
 }
 
-function evaluateBoardState(b, side, hSide, hOpp, curHolding) {
-  let opp = side === 'W' ? 'B' : 'W';
-  let targetR = side === 'W' ? 0 : 4;
-  let oppTargetR = opp === 'W' ? 0 : 4;
+function evaluateBoardState(b, curHolding, side) {
+  let opp = (side === 'W') ? 'B' : 'W';
+  let myTargetR = (side === 'W') ? 0 : 4;
+  let oppTargetR = (opp === 'W') ? 0 : 4;
 
-  let score = 0;
-  let myPieces = 0, oppPieces = 0;
+  let myCount = 0, oppCount = 0;
+  let myDistSum = 0, oppDistSum = 0;
 
   for (let r = 0; r < 5; r++) {
     for (let c = 0; c < 5; c++) {
       let p = b[r][c];
       if (p?.side === side) {
-        myPieces++;
-        let dist = Math.abs(targetR - r) + Math.abs(2 - c);
-        score += (8 - dist) * 4; // 상대 진지 전진 가산점
+        myCount++;
+        myDistSum += (8 - (Math.abs(myTargetR - r) + Math.abs(2 - c)));
       } else if (p?.side === opp) {
-        oppPieces++;
-        let oppDist = Math.abs(oppTargetR - r) + Math.abs(2 - c);
-        score -= (8 - oppDist) * 4;
+        oppCount++;
+        oppDistSum += (8 - (Math.abs(oppTargetR - r) + Math.abs(2 - c)));
       }
     }
   }
 
-  score += (myPieces - oppPieces) * 120; // 말 수 차이 반영
+  if (myCount === 0) return -100000;
+  if (oppCount === 0) return 100000;
 
-  if (curHolding === side && b[targetR][2]?.side === side) score += 5000;
-  if (curHolding === opp && b[oppTargetR][2]?.side === opp) score -= 5000;
+  if (curHolding === side && b[myTargetR][2]?.side === side) return 90000;
+  if (curHolding === opp && b[oppTargetR][2]?.side === opp) return -90000;
+
+  let score = (myCount - oppCount) * 400 + (myDistSum - oppDistSum) * 20;
+
+  // 진지 점령 중 보너스
+  if (curHolding === side) score += 1500;
+  if (curHolding === opp) score -= 1500;
 
   return score;
 }
 
+function alphaBeta(b, depth, alpha, beta, isMaximizing, currentTurn, h, wait, hld, rootSide) {
+  let opp = (currentTurn === 'W') ? 'B' : 'W';
+  let myTargetR = (currentTurn === 'W') ? 0 : 4;
+
+  // 즉시 승리 판정
+  if (hld === currentTurn && b[myTargetR][2]?.side === currentTurn) {
+    return isMaximizing ? 80000 + depth * 100 : -80000 - depth * 100;
+  }
+
+  if (depth === 0) {
+    return evaluateBoardState(b, hld, rootSide);
+  }
+
+  let moves = getAllMoves(b, currentTurn, h);
+  if (moves.length === 0) {
+    return isMaximizing ? -70000 : 70000;
+  }
+
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    for (let m of moves) {
+      let nextB = b.map(row => row.map(cell => cell ? { ...cell } : null));
+      nextB[m.tr][m.tc] = nextB[m.fr][m.fc];
+      nextB[m.fr][m.fc] = null;
+
+      let nextH = { W: [...h.W], B: [...h.B] };
+      nextH[currentTurn][m.ci] = wait;
+      let nextWait = m.cName;
+
+      let nextHld = (nextB[myTargetR][2]?.side === currentTurn) ? currentTurn : (hld === currentTurn ? null : hld);
+
+      let evalScore = alphaBeta(nextB, depth - 1, alpha, beta, false, opp, nextH, nextWait, nextHld, rootSide);
+      maxEval = Math.max(maxEval, evalScore);
+      alpha = Math.max(alpha, evalScore);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    for (let m of moves) {
+      let nextB = b.map(row => row.map(cell => cell ? { ...cell } : null));
+      nextB[m.tr][m.tc] = nextB[m.fr][m.fc];
+      nextB[m.fr][m.fc] = null;
+
+      let nextH = { W: [...h.W], B: [...h.B] };
+      nextH[currentTurn][m.ci] = wait;
+      let nextWait = m.cName;
+
+      let nextHld = (nextB[myTargetR][2]?.side === currentTurn) ? currentTurn : (hld === currentTurn ? null : hld);
+
+      let evalScore = alphaBeta(nextB, depth - 1, alpha, beta, true, opp, nextH, nextWait, nextHld, rootSide);
+      minEval = Math.min(minEval, evalScore);
+      beta = Math.min(beta, evalScore);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+}
+
 function evaluateMoves(side) {
   let moves = getAllMoves(board, side, hands);
+  if (moves.length === 0) return [];
+
+  // 난이도별 탐색 깊이 설정
+  let depth = 4; // God
+  if (aiDifficulty === 'easy') depth = 1;
+  else if (aiDifficulty === 'normal') depth = 2;
+  else if (aiDifficulty === 'hard') depth = 3;
+
+  let opp = (side === 'W') ? 'B' : 'W';
+  let myTargetR = (side === 'W') ? 0 : 4;
+
   let scoredMoves = moves.map(m => {
-    // 1단계: 내 수 가상 실행
-    let simB = board.map(row => row.map(cell => cell ? { ...cell } : null));
-    simB[m.tr][m.tc] = simB[m.fr][m.fc];
-    simB[m.fr][m.fc] = null;
+    let nextB = board.map(row => row.map(cell => cell ? { ...cell } : null));
+    nextB[m.tr][m.tc] = nextB[m.fr][m.fc];
+    nextB[m.fr][m.fc] = null;
 
-    let targetR = side === 'W' ? 0 : 4;
-    let nextHolding = (simB[targetR][2]?.side === side) ? side : (holdingSide === side ? null : holdingSide);
+    let nextH = { W: [...hands.W], B: [...hands.B] };
+    nextH[side][m.ci] = waitCard;
+    let nextWait = m.cName;
 
-    // 승리 직행 수인 경우 최고점
-    if (holdingSide === side && simB[targetR][2]?.side === side) {
-      return { ...m, score: 99999 };
+    let nextHld = (nextB[myTargetR][2]?.side === side) ? side : (holdingSide === side ? null : holdingSide);
+
+    // 즉시 승리 가능한 수
+    if (holdingSide === side && nextB[myTargetR][2]?.side === side) {
+      return { ...m, score: 999999 };
     }
 
-    let opp = side === 'W' ? 'B' : 'W';
-    let simHands = { W: [...hands.W], B: [...hands.B] };
-    let simWait = waitCard;
-    simHands[side][m.ci] = simWait;
-
-    // 2단계: 상대방의 최선의 반격 탐색 (Minimax)
-    let oppMoves = getAllMoves(simB, opp, simHands);
-    let worstOppScore = 9999;
-
-    if (oppMoves.length === 0) {
-      return { ...m, score: 90000 };
+    let score = alphaBeta(nextB, depth - 1, -Infinity, Infinity, false, opp, nextH, nextWait, nextHld, side);
+    
+    // Easy일 땐 약간의 랜덤 오차 추가
+    if (aiDifficulty === 'easy') {
+      score += (Math.random() - 0.5) * 600;
     }
 
-    oppMoves.forEach(om => {
-      let simB2 = simB.map(row => row.map(cell => cell ? { ...cell } : null));
-      simB2[om.tr][om.tc] = simB2[om.fr][om.fc];
-      simB2[om.fr][om.fc] = null;
-
-      let oppTarget = opp === 'W' ? 0 : 4;
-      let finalHolding = (simB2[oppTarget][2]?.side === opp) ? opp : (nextHolding === opp ? null : nextHolding);
-
-      let evalScore = evaluateBoardState(simB2, side, simHands[side], simHands[opp], finalHolding);
-      if (evalScore < worstOppScore) {
-        worstOppScore = evalScore;
-      }
-    });
-
-    return { ...m, score: worstOppScore };
+    return { ...m, score };
   });
 
   return scoredMoves.sort((a, b) => b.score - a.score);
@@ -804,7 +875,7 @@ function render() {
 
   if (!gameOver) {
     let alertMsg = holdingSide ? ` ⚠️[${holdingSide === 'W' ? '백' : '흑'} 진지 점령 중!]` : '';
-    let turnLabel = (turn === 'W') ? '백 차례' : (mode === 'pve' ? '흑(AI 생각 중...)' : '흑 차례');
+    let turnLabel = (turn === 'W') ? '백 차례' : (mode === 'pve' ? '흑(AI 수읽는 중...)' : '흑 차례');
     if (mode === 'net' && myRole) turnLabel = (turn === myRole) ? '👉 내 차례' : '상대방 차례...';
     document.getElementById('status').innerText = `${turnLabel}${alertMsg}`;
   }
